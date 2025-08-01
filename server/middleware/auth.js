@@ -2,7 +2,7 @@
  * Authentication and signature verification middleware
  */
 
-const crypto = require('./crypto');
+const crypto = require('../services/crypto');
 
 const auth = {
     /**

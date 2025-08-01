@@ -84,6 +84,7 @@ class DatabaseService {
                 content TEXT NOT NULL,
                 public_key TEXT NOT NULL,
                 signature_valid BOOLEAN DEFAULT 0,
+                post_number INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (thread_id) REFERENCES threads (id) ON DELETE CASCADE
             )`,
@@ -283,13 +284,22 @@ class DatabaseService {
     async createPost(data) {
         const { threadId, content, publicKey, timestamp, signatureValid } = data;
         
+        // Get the next post number for this thread
+        const maxPostResult = await this.get(`
+            SELECT COALESCE(MAX(post_number), 0) as max_post_number 
+            FROM posts 
+            WHERE thread_id = ?
+        `, [threadId]);
+        
+        const nextPostNumber = (maxPostResult?.max_post_number || 0) + 1;
+        
         const sql = `
-            INSERT INTO posts (thread_id, content, public_key, signature_valid, created_at)
-            VALUES (?, ?, ?, ?, datetime(?, 'unixepoch', 'subsec'))
+            INSERT INTO posts (thread_id, content, public_key, signature_valid, post_number, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime(?, 'unixepoch', 'subsec'))
         `;
         
         const result = await this.run(sql, [
-            threadId, content, publicKey, signatureValid ? 1 : 0, timestamp / 1000
+            threadId, content, publicKey, signatureValid ? 1 : 0, nextPostNumber, timestamp / 1000
         ]);
 
         // Update thread's updated_at and post_count

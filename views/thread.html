@@ -19,11 +19,11 @@
         </div>
 
         <div class="nav">
-            <a href="/">Home</a>
-            <a href="/board/general">General</a>
-            <a href="/board/tech">Tech</a>
-            <a href="/board/crypto">Crypto</a>
-            <a href="/board/random">Random</a>
+            [ <a href="/">Home</a> ]
+            [ <a href="/board/general">/g/</a> ]
+            [ <a href="/board/tech">/t/</a> ]
+            [ <a href="/board/crypto">/cry/</a> ]
+            [ <a href="/board/random">/r/</a> ]
             <button id="newIdentityBtn" class="btn">New Identity</button>
         </div>
 
@@ -43,13 +43,13 @@
         <div class="posts">
             <div class="post">
                 <div class="post-header">
-                    <span class="post-id">OP Anonymous ({{thread.author_id}})</span>
+                    <span class="post-id">Anonymous ({{thread.author_id}})</span>
+                    <span class="post-number">No.{{thread.id}}</span>
                     <span class="post-time">{{thread.created_at}}</span>
                 </div>
                 <div class="post-content">{{thread.content}}</div>
                 <div class="signature-info">
-                    <span class="signature-verified">✓ Signature Valid</span>
-                    <br>Public Key: {{thread.public_key}}...
+                    <span class="signature-verified">✓ Verified</span> | Key: {{thread.public_key}}...
                 </div>
             </div>
         </div>
@@ -61,11 +61,11 @@
                 <input type="hidden" name="threadId" value="{{thread.id}}">
                 
                 <div class="form-group">
-                    <label for="content">Your Reply:</label>
-                    <textarea id="content" name="content" required maxlength="10000" placeholder="Write your reply here..."></textarea>
+                    <label for="content">Comment</label>
+                    <textarea id="content" name="content" required maxlength="10000"></textarea>
                 </div>
                 
-                <button type="submit" class="btn">Post Reply</button>
+                <button type="submit" class="btn">Submit</button>
             </form>
         </div>
 
