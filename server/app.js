@@ -1,199 +1,119 @@
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
-const rateLimit = require('express-rate-limit');
 const { create } = require('express-handlebars');
-const fs = require('fs');
-const crypto = require('crypto');
-
 const database = require('./services/database');
+const apiRoutes = require('./routes/api');
+const security = require('./config/security');
+const crawlerBlocker = require('./middleware/crawler-blocker');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configure Handlebars
+// Correctly configure Handlebars
 const hbs = create({
     extname: '.html',
     defaultLayout: false,
-    partialsDir: path.join(__dirname, '../views/partials')
+    helpers: {
+        // You can add custom helpers here if needed
+    }
 });
 
 app.engine('html', hbs.engine);
 app.set('view engine', 'html');
 app.set('views', path.join(__dirname, '../views'));
 
-// Middleware
-app.use(cors());
+// --- Middleware ---
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
+app.use(security.securityHeaders);
+app.use(crawlerBlocker.blockCrawlers);
 
-// Rate limiting - relaxed for testing
-const createRateLimit = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 10, // limit each IP to 10 requests per windowMs
-    message: 'Too many requests, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false
-});
+// --- Routes ---
+app.use('/api', apiRoutes);
 
-const postRateLimit = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 20, // limit each IP to 20 requests per windowMs
-    message: 'Too many requests, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false
-});
-
-// Anti-crawler middleware
-app.use((req, res, next) => {
-    const userAgent = req.get('User-Agent') || '';
-    const suspiciousAgents = [
-        'bot', 'crawler', 'spider', 'scraper', 'wget', 'curl'
-    ];
-    
-    const isSuspicious = suspiciousAgents.some(agent => 
-        userAgent.toLowerCase().includes(agent)
-    );
-    
-    if (isSuspicious) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
-    
-    next();
-});
-
-// Signature validation middleware
-const validateSignature = (req, res, next) => {
-    const { content, publicKey, signature } = req.body;
-    
-    if (!content || !publicKey || !signature) {
-        return res.status(400).json({ 
-            error: 'Missing required fields: content, publicKey, signature' 
-        });
-    }
-    
-    try {
-        // Validate public key format
-        if (!publicKey.startsWith('-----BEGIN PUBLIC KEY-----') || 
-            !publicKey.endsWith('-----END PUBLIC KEY-----')) {
-            return res.status(400).json({ error: 'Invalid public key format' });
-        }
-        
-        // Verify signature
-        const verify = crypto.createVerify('SHA256');
-        verify.update(content);
-        const isValid = verify.verify(publicKey, signature, 'base64');
-        
-        if (!isValid) {
-            return res.status(400).json({ error: 'Invalid signature' });
-        }
-        
-        next();
-    } catch (error) {
-        console.error('Signature validation error:', error);
-        return res.status(400).json({ error: 'Signature validation failed' });
-    }
-};
-
-// Routes
+// Home page (shows all boards)
 app.get('/', async (req, res) => {
     try {
-        const threads = await database.getThreads('b'); // Default to /b/ board
+        const boards = await database.getBoards();
+        const stats = await database.getForumStats();
         
+        // Use res.render() to correctly process the template
         res.render('board', {
-            boardId: 'b',
-            boardName: 'Random',
-            threads: threads.map(thread => ({
-                ...thread,
-                replies: thread.replies || 0,
-                lastReply: thread.last_reply || thread.created_at
-            }))
+            title: 'Freedom',
+            isIndex: true, // This will trigger the {{#if isIndex}} block
+            boards: boards,
+            stats: stats
         });
     } catch (error) {
         console.error('Error loading home page:', error);
-        res.status(500).send('Internal Server Error');
+        res.status(500).send('Server Error');
     }
 });
 
-app.get('/board/:boardId', async (req, res) => {
+// Board page (shows threads for a specific board)
+app.get('/board/:boardName', async (req, res) => {
     try {
-        const { boardId } = req.params;
-        const threads = await database.getThreads(boardId);
+        const { boardName } = req.params;
+        const board = await database.getBoardByName(boardName);
+
+        if (!board) {
+            return res.status(404).send('Board not found');
+        }
+
+        const threads = await database.getThreads(boardName);
         
+        // Use res.render() here as well
         res.render('board', {
-            boardId,
-            boardName: boardId === 'b' ? 'Random' : boardId.toUpperCase(),
-            threads: threads.map(thread => ({
-                ...thread,
-                replies: thread.replies || 0,
-                lastReply: thread.last_reply || thread.created_at
-            }))
+            title: `/${board.name}/ - ${board.description}`,
+            board: board, // This will trigger the {{#if board}} block
+            threads: threads
         });
     } catch (error) {
-        console.error('Error loading board:', error);
-        res.status(500).send('Internal Server Error');
+        console.error(`Error loading board ${req.params.boardName}:`, error);
+        res.status(500).send('Server Error');
     }
 });
 
+// Thread page (shows posts in a thread)
 app.get('/thread/:threadId', async (req, res) => {
     try {
-        const { threadId } = req.params;
+        const threadId = parseInt(req.params.threadId);
         const thread = await database.getThread(threadId);
-        const posts = await database.getPosts(threadId);
-        
+
         if (!thread) {
             return res.status(404).send('Thread not found');
         }
+
+        const posts = await database.getPosts(threadId);
         
+        // And use res.render() here
         res.render('thread', {
-            thread,
-            posts
+            title: thread.title,
+            thread: thread,
+            posts: posts
         });
     } catch (error) {
-        console.error('Error loading thread:', error);
-        res.status(500).send('Internal Server Error');
+        console.error(`Error loading thread ${req.params.threadId}:`, error);
+        res.status(500).send('Server Error');
     }
 });
 
-// API Routes
-const apiRoutes = require('./routes/api');
-app.use('/api', createRateLimit, postRateLimit, validateSignature, apiRoutes);
 
-// Cleanup scheduler - runs every 5 minutes
-const cleanupInterval = setInterval(async () => {
-    try {
-        const deletedCount = await database.cleanupExpiredThreads();
-        if (deletedCount > 0) {
-            console.log(`Cleaned up ${deletedCount} expired threads`);
-        }
-    } catch (error) {
-        console.error('Error during cleanup:', error);
-    }
-}, 5 * 60 * 1000); // 5 minutes
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    clearInterval(cleanupInterval);
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    clearInterval(cleanupInterval);
-    process.exit(0);
-});
-
-app.listen(PORT, async () => {
-    console.log(`Forum server running on port ${PORT}`);
-    console.log('Cleanup scheduler started - checking every 5 minutes');
-    
-    // Initialize database
+// Start Server and Database
+async function startServer() {
     try {
         await database.init();
-        console.log('Database initialized successfully');
+        app.listen(PORT, () => {
+            console.log(`🚀 Forum is live at http://localhost:${PORT}`);
+        });
+        
+        // Start cleanup job for self-destructing threads
+        setInterval(database.cleanupExpiredThreads, 5 * 60 * 1000); // Check every 5 minutes
     } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('Failed to start server:', error);
         process.exit(1);
     }
-});
+}
+
+startServer();
