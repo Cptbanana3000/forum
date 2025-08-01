@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  forum:
+    build: 
+      context: ../
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../data:/app/data
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  # Optional: IPFS node for distributed content
+  ipfs:
+    image: ipfs/go-ipfs:latest
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs_data:/data/ipfs
+    restart: unless-stopped
+
+volumes:
+  ipfs_data:

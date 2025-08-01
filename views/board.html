@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="referrer" content="no-referrer">
+</head>
+<body>
+    <div id="alertContainer"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>Anonymous Forum</h1>
+            <p class="subtitle">Cryptographically signed anonymous discussions</p>
+            <div id="currentIdentity" class="identity-display"></div>
+        </div>
+
+        <div class="nav">
+            <a href="/">Home</a>
+            <a href="/board/general">General</a>
+            <a href="/board/tech">Tech</a>
+            <a href="/board/crypto">Crypto</a>
+            <a href="/board/random">Random</a>
+            <button id="newIdentityBtn" class="btn">New Identity</button>
+        </div>
+
+        <!-- Show boards if this is the index page -->
+        {{#if isIndex}}
+        <div class="stats-section">
+            <h2>Forum Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <strong>{{stats.board_count}}</strong> Boards
+                </div>
+                <div class="stat-item">
+                    <strong>{{stats.thread_count}}</strong> Threads
+                </div>
+                <div class="stat-item">
+                    <strong>{{stats.post_count}}</strong> Posts
+                </div>
+                <div class="stat-item">
+                    <strong>{{stats.unique_users}}</strong> Unique IDs
+                </div>
+            </div>
+        </div>
+
+        <div class="board-section">
+            <h2>Boards</h2>
+            <div class="board-list">
+                {{#each boards}}
+                <div class="board-card">
+                    <h3><a href="/board/{{name}}">{{name}}</a></h3>
+                    <p class="description">{{description}}</p>
+                    <div class="stats">
+                        <span>{{thread_count}} threads</span>
+                        <span>{{post_count}} posts</span>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+        {{/if}}
+
+        <!-- Show board content if this is a board page -->
+        {{#if board}}
+        <div class="board-header">
+            <h2>/{{board.name}}/ - {{board.description}}</h2>
+        </div>
+
+        <!-- Thread creation form -->
+        <div class="post-form">
+            <h3>Create New Thread</h3>
+            <form id="threadForm">
+                <input type="hidden" name="board" value="{{board.name}}">
+                
+                <div class="form-group">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" required maxlength="200">
+                </div>
+                
+                <div class="form-group">
+                    <label for="content">Content:</label>
+                    <textarea id="content" name="content" required maxlength="10000"></textarea>
+                </div>
+                
+                <button type="submit" class="btn">Create Thread</button>
+            </form>
+        </div>
+
+        <!-- Thread list -->
+        <div class="thread-section">
+            <h3>Threads</h3>
+            <div class="thread-list">
+                {{#each threads}}
+                <div class="thread">
+                    <div class="thread-header">
+                        <a href="/thread/{{id}}" class="thread-title">{{title}}</a>
+                        <div class="thread-meta">
+                            Anonymous ({{author_id}}) • {{reply_count}} replies • {{created_at}}
+                        </div>
+                    </div>
+                    <div class="thread-preview">{{content}}</div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+        {{/if}}
+    </div>
+
+    <script src="/js/crypto.js"></script>
+    <script src="/js/posting.js"></script>
+    <script>
+        // Set current board for the forum manager
+        if (typeof window.forumManager !== 'undefined') {
+            const boardName = document.querySelector('input[name="board"]')?.value;
+            if (boardName) {
+                window.forumManager.setCurrentBoard(boardName);
+            }
+        }
+    </script>
+</body>
+</html>

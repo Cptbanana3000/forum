@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="referrer" content="no-referrer">
+</head>
+<body>
+    <div id="alertContainer"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>Anonymous Forum</h1>
+            <p class="subtitle">Cryptographically signed anonymous discussions</p>
+            <div id="currentIdentity" class="identity-display"></div>
+        </div>
+
+        <div class="nav">
+            <a href="/">Home</a>
+            <a href="/board/general">General</a>
+            <a href="/board/tech">Tech</a>
+            <a href="/board/crypto">Crypto</a>
+            <a href="/board/random">Random</a>
+            <button id="newIdentityBtn" class="btn">New Identity</button>
+        </div>
+
+        <!-- Thread header -->
+        <div class="thread-header-section">
+            <h2>{{thread.title}}</h2>
+            <div class="thread-meta">
+                <span>Board: <a href="/board/{{thread.board_name}}">/{{thread.board_name}}/</a></span>
+                <span>•</span>
+                <span>{{thread.reply_count}} replies</span>
+                <span>•</span>
+                <span>Created: {{thread.created_at}}</span>
+            </div>
+        </div>
+
+        <!-- Original post -->
+        <div class="posts">
+            <div class="post">
+                <div class="post-header">
+                    <span class="post-id">OP Anonymous ({{thread.author_id}})</span>
+                    <span class="post-time">{{thread.created_at}}</span>
+                </div>
+                <div class="post-content">{{thread.content}}</div>
+                <div class="signature-info">
+                    <span class="signature-verified">✓ Signature Valid</span>
+                    <br>Public Key: {{thread.public_key}}...
+                </div>
+            </div>
+        </div>
+
+        <!-- Reply form -->
+        <div class="post-form">
+            <h3>Reply to Thread</h3>
+            <form id="postForm">
+                <input type="hidden" name="threadId" value="{{thread.id}}">
+                
+                <div class="form-group">
+                    <label for="content">Your Reply:</label>
+                    <textarea id="content" name="content" required maxlength="10000" placeholder="Write your reply here..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn">Post Reply</button>
+            </form>
+        </div>
+
+        <!-- Posts list -->
+        <div class="posts-section">
+            <h3>Replies</h3>
+            <div id="postsContainer" class="posts">
+                <!-- Posts will be loaded here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/crypto.js"></script>
+    <script src="/js/posting.js"></script>
+    <script>
+        // Set current thread for the forum manager
+        const threadId = document.querySelector('input[name="threadId"]')?.value;
+        if (threadId && typeof window.forumManager !== 'undefined') {
+            window.forumManager.setCurrentThread(threadId);
+        }
+
+        // Load initial posts
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (threadId) {
+                try {
+                    const response = await fetch(`/api/threads/${threadId}/posts`);
+                    if (response.ok) {
+                        const posts = await response.json();
+                        if (window.forumManager) {
+                            window.forumManager.renderPosts(posts);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to load posts:', error);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "anonymous-forum",
+  "version": "1.0.0",
+  "description": "A cryptographically-secured anonymous forum with self-destruction capabilities",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "nuke": "node scripts/nuke-system.js",
+    "nuke-confirm": "node scripts/nuke-system.js --confirm-destruction",
+    "docker:build": "docker build -f docker/Dockerfile -t anonymous-forum .",
+    "docker:run": "docker-compose -f docker/docker-compose.yml up",
+    "docker:stop": "docker-compose -f docker/docker-compose.yml down"
+  },
+  "keywords": [
+    "anonymous",
+    "forum",
+    "cryptography",
+    "privacy",
+    "blockchain",
+    "signatures"
+  ],
+  "author": "Anonymous",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "private"
+  },
+  "private": true
+}
