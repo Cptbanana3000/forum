@@ -11,42 +11,91 @@ const cryptoService = {
      */
     async verifySignature(message, signatureHex, publicKeyHex) {
         try {
-            // Convert hex strings to buffers
+            // Use Web Crypto API if available (Node.js 16+)
+            if (crypto.webcrypto) {
+                return await this.verifySignatureWebFormat(message, signatureHex, publicKeyHex);
+            }
+
+            // Fallback to Node.js crypto with proper signature format conversion
             const signatureBuffer = Buffer.from(signatureHex, 'hex');
             const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
 
-            // Import the public key
-            const publicKey = crypto.createPublicKey({
-                key: publicKeyBuffer,
-                format: 'der',
-                type: 'spki'
-                // For raw format P-256 keys, we need to construct the DER format
-            });
-
-            // For raw P-256 keys (65 bytes), we need to construct proper DER format
-            if (publicKeyBuffer.length === 65) {
-                // P-256 uncompressed point format: 0x04 + 32 bytes X + 32 bytes Y
-                const x = publicKeyBuffer.slice(1, 33);
-                const y = publicKeyBuffer.slice(33, 65);
-                
-                // Create DER-encoded SubjectPublicKeyInfo for P-256
-                const derKey = this.createP256DER(x, y);
-                
-                const publicKeyObj = crypto.createPublicKey({
-                    key: derKey,
-                    format: 'der',
-                    type: 'spki'
-                });
-
-                // Verify the signature
-                const verify = crypto.createVerify('SHA256');
-                verify.update(message);
-                return verify.verify(publicKeyObj, signatureBuffer);
+            // Validate P-256 uncompressed format (65 bytes: 0x04 + 32 bytes X + 32 bytes Y)
+            if (publicKeyBuffer.length !== 65 || publicKeyBuffer[0] !== 0x04) {
+                console.error('Invalid public key format');
+                return false;
             }
 
-            return false;
+            const x = publicKeyBuffer.slice(1, 33);
+            const y = publicKeyBuffer.slice(33, 65);
+            
+            // Create DER-encoded SubjectPublicKeyInfo for P-256
+            const derKey = this.createP256DER(x, y);
+            
+            const publicKeyObj = crypto.createPublicKey({
+                key: derKey,
+                format: 'der',
+                type: 'spki'
+            });
+
+            // Convert IEEE P1363 signature to DER format if needed
+            let finalSignature = signatureBuffer;
+            if (signatureBuffer.length === 64) {
+                // IEEE P1363 format (r||s) -> DER format
+                finalSignature = this.convertP1363ToDER(signatureBuffer);
+            }
+
+            // Verify the signature
+            const verify = crypto.createVerify('SHA256');
+            verify.update(message);
+            return verify.verify(publicKeyObj, finalSignature);
+
         } catch (error) {
             console.error('Signature verification error:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Verify signature using Web Crypto API format
+     */
+    async verifySignatureWebFormat(message, signatureHex, publicKeyHex) {
+        try {
+            const signatureBuffer = Buffer.from(signatureHex, 'hex');
+            const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+
+            // Validate P-256 uncompressed format
+            if (publicKeyBuffer.length !== 65 || publicKeyBuffer[0] !== 0x04) {
+                return false;
+            }
+
+            // Import public key for Web Crypto API
+            const publicKey = await crypto.webcrypto.subtle.importKey(
+                'raw',
+                publicKeyBuffer,
+                {
+                    name: 'ECDSA',
+                    namedCurve: 'P-256'
+                },
+                false,
+                ['verify']
+            );
+
+            // Verify signature
+            const messageBuffer = Buffer.from(message);
+            const isValid = await crypto.webcrypto.subtle.verify(
+                {
+                    name: 'ECDSA',
+                    hash: 'SHA-256'
+                },
+                publicKey,
+                signatureBuffer,
+                messageBuffer
+            );
+
+            return isValid;
+        } catch (error) {
+            console.error('Web Crypto verification error:', error);
             return false;
         }
     },
@@ -84,6 +133,77 @@ const cryptoService = {
             Buffer.from([0x30, totalLength]), // SEQUENCE
             algorithmId,
             publicKeyBitString
+        ]);
+    },
+
+    /**
+     * Convert IEEE P1363 signature to DER format
+     * P1363 format: r (32 bytes) || s (32 bytes)
+     * DER format: SEQUENCE { INTEGER r, INTEGER s }
+     */
+    convertP1363ToDER(p1363Signature) {
+        if (p1363Signature.length !== 64) {
+            throw new Error('Invalid P1363 signature length');
+        }
+
+        const r = p1363Signature.slice(0, 32);
+        const s = p1363Signature.slice(32, 64);
+
+        // Encode INTEGER for r
+        const rInteger = this.encodeASN1Integer(r);
+        // Encode INTEGER for s
+        const sInteger = this.encodeASN1Integer(s);
+
+        // Create SEQUENCE containing both integers
+        const content = Buffer.concat([rInteger, sInteger]);
+        const length = content.length;
+        
+        let lengthBytes;
+        if (length < 0x80) {
+            lengthBytes = Buffer.from([length]);
+        } else if (length < 0x100) {
+            lengthBytes = Buffer.from([0x81, length]);
+        } else {
+            lengthBytes = Buffer.from([0x82, length >> 8, length & 0xff]);
+        }
+
+        return Buffer.concat([
+            Buffer.from([0x30]), // SEQUENCE tag
+            lengthBytes,
+            content
+        ]);
+    },
+
+    /**
+     * Encode a big integer as ASN.1 INTEGER
+     */
+    encodeASN1Integer(value) {
+        // Remove leading zeros, but keep at least one byte
+        let trimmed = value;
+        while (trimmed.length > 1 && trimmed[0] === 0x00) {
+            trimmed = trimmed.slice(1);
+        }
+
+        // Add leading zero if the high bit is set (to keep it positive)
+        if (trimmed[0] >= 0x80) {
+            trimmed = Buffer.concat([Buffer.from([0x00]), trimmed]);
+        }
+
+        const length = trimmed.length;
+        let lengthBytes;
+        
+        if (length < 0x80) {
+            lengthBytes = Buffer.from([length]);
+        } else if (length < 0x100) {
+            lengthBytes = Buffer.from([0x81, length]);
+        } else {
+            lengthBytes = Buffer.from([0x82, length >> 8, length & 0xff]);
+        }
+
+        return Buffer.concat([
+            Buffer.from([0x02]), // INTEGER tag
+            lengthBytes,
+            trimmed
         ]);
     },
 

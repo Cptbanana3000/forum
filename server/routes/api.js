@@ -11,8 +11,7 @@ const crypto = require('../services/crypto');
 const auth = require('../middleware/auth');
 const security = require('../config/security');
 
-// Apply authentication middleware to all routes
-router.use(auth.validatePublicKey);
+// Apply anonymous ID middleware to all routes (for identification)
 router.use(auth.addAnonymousId);
 
 /**
@@ -63,7 +62,7 @@ router.post('/threads',
     auth.preventDuplicateContent(5 * 60 * 1000), // Prevent duplicate threads for 5 minutes
     async (req, res) => {
         try {
-            const { board, title, content } = req.body;
+            const { board, title, content, selfDestruct } = req.body;
             const { publicKey, timestamp } = req.auth;
 
             // Validate input
@@ -82,6 +81,15 @@ router.post('/threads',
                 return res.status(400).json({ error: contentValidation.error });
             }
 
+            // Validate self-destruct timer (convert to minutes)
+            let selfDestructMinutes = null;
+            if (selfDestruct && selfDestruct !== '') {
+                selfDestructMinutes = parseInt(selfDestruct);
+                if (isNaN(selfDestructMinutes) || selfDestructMinutes < 0) {
+                    return res.status(400).json({ error: 'Invalid self-destruct timer' });
+                }
+            }
+
             // Create thread
             const threadId = await database.createThread({
                 board,
@@ -89,7 +97,8 @@ router.post('/threads',
                 content,
                 publicKey,
                 timestamp,
-                signatureValid: true
+                signatureValid: true,
+                selfDestructMinutes
             });
 
             res.status(201).json({ 

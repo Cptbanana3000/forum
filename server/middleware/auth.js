@@ -122,7 +122,11 @@ const auth = {
     validatePublicKey: (req, res, next) => {
         const { publicKey } = req.body;
 
+        console.log('validatePublicKey - received body:', JSON.stringify(req.body, null, 2));
+        console.log('validatePublicKey - publicKey:', publicKey);
+
         if (!publicKey) {
+            console.log('validatePublicKey - No public key provided');
             return res.status(400).json({
                 error: 'Public key is required'
             });
@@ -130,6 +134,7 @@ const auth = {
 
         // Check if it's a valid hex string
         if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
+            console.log('validatePublicKey - Invalid hex format');
             return res.status(400).json({
                 error: 'Invalid public key format'
             });
@@ -137,11 +142,13 @@ const auth = {
 
         // Check expected length for P-256 keys (65 bytes uncompressed = 130 hex chars)
         if (publicKey.length !== 130) {
+            console.log('validatePublicKey - Invalid length:', publicKey.length);
             return res.status(400).json({
                 error: 'Invalid public key length'
             });
         }
 
+        console.log('validatePublicKey - Valid public key');
         next();
     },
 

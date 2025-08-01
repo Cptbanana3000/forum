@@ -13,8 +13,8 @@
     
     <div class="container">
         <div class="header">
-            <h1>Anonymous Forum</h1>
-            <p class="subtitle">Cryptographically signed anonymous discussions</p>
+            <h1>Freedom</h1>
+            <p class="subtitle"> anonymous discussions</p>
             <div id="currentIdentity" class="identity-display"></div>
         </div>
 
@@ -81,6 +81,20 @@
                     <textarea id="content" name="content" required maxlength="10000"></textarea>
                 </div>
                 
+                <div class="form-group">
+                    <label for="selfDestruct">Self-Destruct Timer (optional)</label>
+                    <select id="selfDestruct" name="selfDestruct">
+                        <option value="">Never (permanent)</option>
+                        <option value="60">1 hour</option>
+                        <option value="360">6 hours</option>
+                        <option value="720">12 hours</option>
+                        <option value="1440">24 hours</option>
+                        <option value="4320">3 days</option>
+                        <option value="10080">7 days</option>
+                        <option value="43200">30 days</option>
+                    </select>
+                </div>
+                
                 <button type="submit" class="btn">Submit</button>
             </form>
         </div>
@@ -94,7 +108,7 @@
                     <div class="thread-header">
                         <a href="/thread/{{id}}" class="thread-title">{{title}}</a>
                         <div class="thread-meta">
-                            Anonymous ({{author_id}}) • {{reply_count}} replies • {{created_at}}
+                            Anonymous ({{author_id}}) • {{reply_count}} replies
                         </div>
                     </div>
                     <div class="thread-preview">{{content}}</div>

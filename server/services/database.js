@@ -74,6 +74,7 @@ class DatabaseService {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 post_count INTEGER DEFAULT 0,
+                self_destruct_at DATETIME,
                 FOREIGN KEY (board_id) REFERENCES boards (id)
             )`,
 
@@ -102,8 +103,57 @@ class DatabaseService {
             await this.run(sql);
         }
 
+        // Run migrations to ensure schema is up to date
+        await this.runMigrations();
+
         // Insert default boards
         await this.createDefaultBoards();
+    }
+
+    /**
+     * Run database migrations to update schema
+     */
+    async runMigrations() {
+        try {
+            // Check if post_number column exists in posts table
+            const tableInfo = await this.all("PRAGMA table_info(posts)");
+            const hasPostNumber = tableInfo.some(column => column.name === 'post_number');
+            
+            if (!hasPostNumber) {
+                console.log('Adding post_number column to posts table...');
+                await this.run('ALTER TABLE posts ADD COLUMN post_number INTEGER NOT NULL DEFAULT 0');
+                
+                // Update existing posts with sequential post numbers
+                const threads = await this.all('SELECT DISTINCT thread_id FROM posts ORDER BY thread_id');
+                for (const thread of threads) {
+                    const posts = await this.all(
+                        'SELECT id FROM posts WHERE thread_id = ? ORDER BY created_at', 
+                        [thread.thread_id]
+                    );
+                    
+                    for (let i = 0; i < posts.length; i++) {
+                        await this.run(
+                            'UPDATE posts SET post_number = ? WHERE id = ?',
+                            [i + 1, posts[i].id]
+                        );
+                    }
+                }
+                console.log('Post number migration completed');
+            }
+
+            // Check if self_destruct_at column exists in threads table
+            const threadsTableInfo = await this.all("PRAGMA table_info(threads)");
+            const hasSelfDestruct = threadsTableInfo.some(column => column.name === 'self_destruct_at');
+            
+            if (!hasSelfDestruct) {
+                console.log('Adding self_destruct_at column to threads table...');
+                await this.run('ALTER TABLE threads ADD COLUMN self_destruct_at DATETIME');
+                console.log('Self-destruct migration completed');
+            }
+        } catch (error) {
+            console.error('Migration error:', error);
+            // Don't throw - continue with initialization
+        }
     }
 
     /**
@@ -111,6 +161,7 @@ class DatabaseService {
      */
     async createDefaultBoards() {
         const defaultBoards = [
+            { name: 'b', description: 'Random discussion' },
             { name: 'general', description: 'General discussion' },
             { name: 'tech', description: 'Technology and programming' },
             { name: 'crypto', description: 'Cryptocurrency and blockchain' },
@@ -240,7 +291,7 @@ class DatabaseService {
      * Create a new thread
      */
     async createThread(data) {
-        const { board, title, content, publicKey, timestamp, signatureValid } = data;
+        const { board, title, content, publicKey, timestamp, signatureValid, selfDestructMinutes } = data;
         
         // Get board ID
         const boardRow = await this.getBoardByName(board);
@@ -248,13 +299,19 @@ class DatabaseService {
             throw new Error('Board not found');
         }
 
+        // Calculate self-destruct time if specified
+        let selfDestructAt = null;
+        if (selfDestructMinutes && selfDestructMinutes > 0) {
+            selfDestructAt = new Date(timestamp + (selfDestructMinutes * 60 * 1000));
+        }
+
         const sql = `
-            INSERT INTO threads (board_id, title, content, public_key, signature_valid, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime(?, 'unixepoch', 'subsec'))
+            INSERT INTO threads (board_id, title, content, public_key, signature_valid, created_at, self_destruct_at)
+            VALUES (?, ?, ?, ?, ?, datetime(?, 'unixepoch', 'subsec'), ?)
         `;
         
         const result = await this.run(sql, [
-            boardRow.id, title, content, publicKey, signatureValid ? 1 : 0, timestamp / 1000
+            boardRow.id, title, content, publicKey, signatureValid ? 1 : 0, timestamp / 1000, selfDestructAt
         ]);
         
         return result.id;
@@ -413,6 +470,28 @@ class DatabaseService {
                     console.log('Database connection closed');
                 }
             });
+        }
+    }
+
+    /**
+     * Delete expired threads (self-destruct cleanup)
+     */
+    async cleanupExpiredThreads() {
+        try {
+            const now = new Date().toISOString();
+            const result = await this.run(
+                'DELETE FROM threads WHERE self_destruct_at IS NOT NULL AND self_destruct_at <= ?',
+                [now]
+            );
+            
+            if (result.changes > 0) {
+                console.log(`Cleaned up ${result.changes} expired threads`);
+            }
+            
+            return result.changes;
+        } catch (error) {
+            console.error('Error cleaning up expired threads:', error);
+            return 0;
         }
     }
 }

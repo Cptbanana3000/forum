@@ -261,25 +261,16 @@ class ForumManager {
      */
     renderPost(post) {
         const shortId = post.public_key.substring(0, 8);
-        const timestamp = new Date(post.created_at).toLocaleString();
         const content = this.escapeHtml(post.content);
         const postNumber = post.post_number || post.id;
-        
-        const signatureStatus = post.signature_valid ? 
-            '<span class="signature-verified">✓ Verified</span>' :
-            '<span class="signature-failed">✗ Invalid</span>';
 
         return `
             <div class="post">
                 <div class="post-header">
                     <span class="post-id">Anonymous (${shortId})</span>
                     <span class="post-number">No.${postNumber}</span>
-                    <span class="post-time">${timestamp}</span>
                 </div>
                 <div class="post-content">${content}</div>
-                <div class="signature-info">
-                    ${signatureStatus} | Key: ${post.public_key.substring(0, 16)}...
-                </div>
             </div>
         `;
     }

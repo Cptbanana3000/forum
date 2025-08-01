@@ -24,7 +24,7 @@ const security = {
         // Stricter rate limit for posting
         posting: rateLimit({
             windowMs: 60 * 1000, // 1 minute
-            max: 5, // Limit each IP to 5 posts per minute
+            max: 20, // Limit each IP to 20 posts per minute (increased for testing)
             message: {
                 error: 'Too many posts, please slow down.'
             },
@@ -34,8 +34,8 @@ const security = {
 
         // Very strict rate limit for thread creation
         threadCreation: rateLimit({
-            windowMs: 5 * 60 * 1000, // 5 minutes
-            max: 2, // Limit each IP to 2 threads per 5 minutes
+            windowMs: 60 * 1000, // 1 minute (reduced from 5 minutes)
+            max: 10, // Limit each IP to 10 threads per minute (increased for testing)
             message: {
                 error: 'Too many threads created, please wait before creating another.'
             },
